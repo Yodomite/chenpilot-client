@@ -13,7 +13,8 @@ import {
   AgentQueryResponse,
   ApiResponse,
   ChatMessage,
-  Conversation
+  Conversation,
+  PromptVersionRecord
 } from '@/types';
 import agentService from './agentService';
 
@@ -461,6 +462,16 @@ class ApiService {
 
   async getConversationStats(): Promise<ApiResponse<{ totalConversations: number; totalMessages: number; activeConversations: number }>> {
     const response = await this.api.get<ApiResponse<{ totalConversations: number; totalMessages: number; activeConversations: number }>>('/chat/stats');
+    return response.data;
+  }
+
+  async getPromptVersions(): Promise<PromptVersionRecord[] | ApiResponse<PromptVersionRecord[]> | PromptVersionRecord> {
+    const response = await this.api.get<PromptVersionRecord[] | ApiResponse<PromptVersionRecord[]> | PromptVersionRecord>('/versions');
+    return response.data;
+  }
+
+  async activatePromptVersion(id: string): Promise<ApiResponse<PromptVersionRecord> | PromptVersionRecord> {
+    const response = await this.api.patch<ApiResponse<PromptVersionRecord> | PromptVersionRecord>(`/versions/${id}/activate`);
     return response.data;
   }
 
