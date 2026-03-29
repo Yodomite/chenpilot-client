@@ -2,6 +2,15 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAppDispatch, useAppSelector } from '@/store';
+import { getAccountStatus, getBalance, deployAccount, fundAccount, getStellarNetworkStatus, getAccountTransactions } from '@/store/slices/accountSlice';
+import { loadUser } from '@/store/slices/authSlice';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { ChatLayout } from '@/components/layout/ChatLayout';
+import TransactionTable from '@/components/dashboard/TransactionTable';
 import {
   AlertTriangle,
   Bot,
@@ -12,6 +21,13 @@ import {
   RefreshCw,
   Sparkles,
   Wand2
+  ShieldCheck,
+  Wallet,
+  Coins,
+  Zap,
+  Activity,
+  AlertTriangle,
+  Droplets
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ChatLayout } from '@/components/layout/ChatLayout';
@@ -41,6 +57,18 @@ function isRecord(value: unknown): value is PromptVersionRecord {
 function getString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }
+import LiquidityPoolStats from '@/components/widgets/LiquidityPoolStats';
+
+export default function DashboardPage() {
+  const router = useRouter();
+  const dispatch = useAppDispatch();
+  const { user, isAuthenticated } = useAppSelector((state) => state.auth);
+  const { status, balance, isLoading, network, transactions } = useAppSelector((state) => state.account);
+  const { messages } = useAppSelector((state) => state.chat);
+  
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
 
 function getBoolean(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null;
@@ -298,6 +326,37 @@ export default function DashboardPage() {
     if (!selectedVersion) {
       return [];
     }
+  // Fetch transactions
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) {
+      return;
+    }
+
+    dispatch(getAccountTransactions({ userId: user.id, page: currentPage, limit: pageSize }));
+  }, [dispatch, isAuthenticated, user?.id, currentPage, pageSize]);
+
+  // Update total count from API response
+  useEffect(() => {
+    // This will be set when the API response comes back with pagination data
+    if (transactions.transactions.length > 0) {
+      // Mock total count calculation - in production this would come from API
+      setTotalCount(transactions.transactions.length * 2);
+    }
+  }, [transactions.transactions]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setCurrentPage(1); // Reset to first page when changing page size
+  };
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success(`${label} copied to clipboard`);
+  };
 
     return getPlaceholders(selectedVersion.template).filter(
       (placeholder) => parsedVariables.variables[placeholder] === undefined
@@ -363,6 +422,119 @@ export default function DashboardPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
+              {/* Step 3: Deployed */}
+              <Card className={`relative overflow-hidden border-2 transition-all duration-500 ${status?.isDeployed ? 'border-green-500/50 bg-green-500/5' : status?.isFunded ? 'border-purple-500/30 bg-purple-500/5' : 'border-gray-800 opacity-50'}`}>
+                <div className="flex items-start justify-between">
+                  <div className="z-10">
+                    <div className="flex items-center mb-2">
+                      <div className={`p-2 rounded-lg mr-3 ${status?.isDeployed ? 'bg-green-500/20' : status?.isFunded ? 'bg-purple-500/20' : 'bg-gray-800'}`}>
+                        <Zap className={`h-5 w-5 ${status?.isDeployed ? 'text-green-400' : status?.isFunded ? 'text-purple-400' : 'text-gray-400'}`} />
+                      </div>
+                      <h3 className={`font-bold ${status?.isDeployed ? 'text-green-400' : status?.isFunded ? 'text-purple-400' : 'text-gray-400'}`}>3. Deployed</h3>
+                    </div>
+                    <p className="text-sm text-gray-400 mb-4">Account is live and DeFi-ready.</p>
+                    {status?.isDeployed ? (
+                      <div className="space-y-2">
+                        <div className="text-xs py-1 px-2 bg-green-500/20 text-green-400 rounded-full inline-flex items-center border border-green-500/30">
+                          <ShieldCheck className="h-3 w-3 mr-1" /> Full Access
+                        </div>
+                        <div className="flex items-center text-xs text-green-500 font-medium">
+                          <CheckCircle2 className="h-3 w-3 mr-1" /> Deployed
+                        </div>
+                      </div>
+                    ) : status?.isFunded ? (
+                      <div className="flex items-center text-xs text-purple-400 font-medium animate-pulse">
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" /> Finalizing deployment...
+                      </div>
+                    ) : (
+                      <div className="flex items-center text-xs text-gray-500">
+                        <Circle className="h-3 w-3 mr-1" /> Waiting for funding
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-white mb-6">
+              Quick Actions
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {quickActions.map((action, index) => (
+                <Card key={index} className="cursor-pointer hover:shadow-lg transition-shadow">
+                  <div className="flex items-start space-x-4">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-white mb-1">
+                        {action.title}
+                      </h3>
+                      <p className="text-gray-300 mb-4">
+                        {action.description}
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={action.action}
+                      >
+                        Get Started
+                        <ExternalLink className="h-4 w-4 ml-1" />
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+
+          {/* Liquidity Pool Stats */}
+          <div className="mb-12">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-white flex items-center">
+                <Droplets className="mr-2 h-6 w-6 text-blue-400" />
+                Liquidity Pool Statistics
+              </h2>
+              <div className="flex items-center space-x-2 bg-gray-900/50 px-3 py-1.5 rounded-full border border-gray-800">
+                <Activity className="h-4 w-4 text-green-400" />
+                <span className="text-xs font-medium text-gray-300">
+                  Live Data
+                </span>
+              </div>
+            </div>
+            <LiquidityPoolStats />
+          </div>
+
+          {/* Recent Activity */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-white mb-6">
+              Recent Activity
+            </h2>
+            <Card>
+              {messages.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-medium text-white">
+                      Recent Chat Messages
+        {/* Stellar Network */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-white mb-6">
+            Stellar Network
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card>
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-300">
+                    Network Status
+                  </p>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <Activity className={`h-4 w-4 ${networkStatusColor}`} />
+                    <span className={`text-lg font-semibold ${networkStatusColor}`}>
+                      {networkStatusLabel}
+                    </span>
+                  </div>
+                </div>
                 <Button
                   variant="ghost"
                   onClick={() => void loadVersions(true)}
@@ -660,6 +832,44 @@ export default function DashboardPage() {
               </Card>
             </div>
           </section>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <h3 className="text-lg font-medium text-white mb-2">
+                    No recent activity
+                  </h3>
+                  <p className="text-gray-300 mb-4">
+                    Your recent transactions and interactions will appear here.
+                  </p>
+                  <Button
+                    onClick={() => router.push('/chat')}
+                  >
+                    Start with AI Agent
+                  </Button>
+                </div>
+              )}
+            </Card>
+          </div>
+
+          {/* Transaction History */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-white mb-6">
+              On-Chain Transaction History
+            </h2>
+            <TransactionTable
+              transactions={transactions.transactions}
+              isLoading={transactions.isLoading}
+              error={transactions.error}
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalCount={totalCount}
+              onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
+            />
+          </div>
+
         </div>
       </div>
     </ChatLayout>

@@ -181,6 +181,27 @@ export const getTransactionHistory = createAsyncThunk(
   },
 );
 
+export const getAccountTransactions = createAsyncThunk(
+  "account/getAccountTransactions",
+  async (
+    { userId, page = 1, limit = 10 }: { userId: string; page?: number; limit?: number },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await apiService.getAccountTransactions(userId, page, limit);
+      if (!response.success) {
+        return rejectWithValue(response.message || "Failed to fetch transactions");
+      }
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(
+        error.message || "Failed to fetch account transactions",
+      );
+    }
+  },
+);
+
+
 const accountSlice = createSlice({
   name: "account",
   initialState,
@@ -351,6 +372,20 @@ const accountSlice = createSlice({
         state.transactions.error = null;
       })
       .addCase(getTransactionHistory.rejected, (state, action) => {
+        state.transactions.isLoading = false;
+        state.transactions.error = action.payload as string;
+      })
+      // Get Account Transactions
+      .addCase(getAccountTransactions.pending, (state) => {
+        state.transactions.isLoading = true;
+        state.transactions.error = null;
+      })
+      .addCase(getAccountTransactions.fulfilled, (state, action) => {
+        state.transactions.isLoading = false;
+        state.transactions.transactions = action.payload.transactions;
+        state.transactions.error = null;
+      })
+      .addCase(getAccountTransactions.rejected, (state, action) => {
         state.transactions.isLoading = false;
         state.transactions.error = action.payload as string;
       });

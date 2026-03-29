@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { 
   RegisterRequest, 
   LoginRequest, 
@@ -15,8 +15,13 @@ import {
   ChatMessage,
   Conversation,
   PromptVersionRecord
+  LiquidityPool,
+  LiquidityStats,
+  LiquidityRequest
+  StellarTransaction
 } from '@/types';
 import agentService from './agentService';
+import { tokenRefreshService } from './tokenRefreshService';
 
 class ApiService {
   private api: AxiosInstance;
@@ -44,18 +49,48 @@ class ApiService {
       }
     );
 
-    // Response interceptor for error handling
+    // Response interceptor for automatic token refresh
     this.api.interceptors.response.use(
       (response) => response,
-      (error) => {
-        if (error.response?.status === 401) {
+      async (error) => {
+        const originalRequest = error.config;
+
+        // If error is not 401 or original request already tried refresh, reject
+        if (error.response?.status !== 401 || originalRequest._retry) {
+          // Handle 401 by clearing token and redirecting to login
+          if (error.response?.status === 401) {
+            this.clearToken();
+            if (typeof window !== 'undefined') {
+              window.location.href = '/auth/login';
+            }
+          }
+          return Promise.reject(error);
+        }
+
+        // Mark that we're retrying
+        originalRequest._retry = true;
+
+        try {
+          // Attempt to refresh the token
+          const response = await tokenRefreshService.refreshToken(this.api.defaults.baseURL as string);
+          const newToken = response.token;
+          
+          // Update the token in the service and original request
+          this.setToken(newToken);
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          
+          // Retry the original request
+          return this.api(originalRequest);
+        } catch (refreshError) {
+          // Refresh failed, clear token and redirect to login
           this.clearToken();
-          // Redirect to login or dispatch logout action
+          
           if (typeof window !== 'undefined') {
             window.location.href = '/auth/login';
           }
+          
+          return Promise.reject(refreshError);
         }
-        return Promise.reject(error);
       }
     );
   }
@@ -104,8 +139,8 @@ class ApiService {
     
     const response = await this.api.post<RegisterResponse>('/auth/register', data);
     // Persist token on successful registration to keep the user authenticated
-    if (response.data?.success && (response.data as any)?.data?.token) {
-      this.setToken((response.data as any).data.token);
+    if (response.data?.success && response.data.data?.token) {
+      this.setToken(response.data.data.token);
     }
     return response.data;
   }
@@ -162,12 +197,31 @@ class ApiService {
   async logout(): Promise<void> {
     try {
       await this.api.post('/auth/logout');
-    } catch (error) {
+    } catch {
       // Even if logout fails on server, clear local token
       console.warn('Logout request failed, clearing local token anyway');
     } finally {
       this.clearToken();
     }
+  }
+
+  async refreshToken(): Promise<{ token: string }> {
+    // Use direct axios call to avoid interceptor recursion
+    const response = await axios.post<{ token: string }>(
+      `${this.api.defaults.baseURL}/auth/refresh`,
+      {},
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          // Don't send Authorization header for refresh to avoid circular dependency
+        },
+      }
+    );
+    
+    if (response.data?.token) {
+      this.setToken(response.data.token);
+    }
+    return response.data;
   }
 
   // Protected endpoints
@@ -193,6 +247,29 @@ class ApiService {
     const response = await this.api.delete<ApiResponse<{ message: string }>>('/auth/account');
     this.clearToken();
     return response.data;
+  }
+
+  async exportUserData(): Promise<Blob> {
+    const endpoints = ['/data-export', '/data/export', '/api/data-export'];
+
+    for (const endpoint of endpoints) {
+      try {
+        const response = await this.api.get<Blob>(endpoint, {
+          responseType: 'blob',
+        });
+
+        if (response.status === 200 && response.data) {
+          return response.data;
+        }
+      } catch (error: unknown) {
+        if (axios.isAxiosError(error) && error.response?.status === 404) {
+          continue; // try next endpoint
+        }
+        throw error;
+      }
+    }
+
+    throw new Error('User data export endpoint not found.');
   }
 
   // Starknet account management
@@ -232,14 +309,22 @@ class ApiService {
     return response.data;
   }
 
+  // Account transaction endpoints
+  async getAccountTransactions(userId: string, page: number = 1, limit: number = 10): Promise<ApiResponse<{ transactions: StellarTransaction[]; total: number; page: number; limit: number }>> {
+    const response = await this.api.get<ApiResponse<{ transactions: StellarTransaction[]; total: number; page: number; limit: number }>>(`/account/${userId}/transactions`, {
+      params: { page, limit }
+    });
+    return response.data;
+  }
+
   // Contact management - Note: Contact endpoints are not available in experimental backend
   // Contact management is handled through the agent query system
   async getContacts(): Promise<ApiResponse<Contact[]>> {
     try {
       const response = await this.api.get<ApiResponse<Contact[]>>('/contacts');
       return response.data;
-    } catch (error: any) {
-      if (error.response?.status === 404) {
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
         // Contact endpoints not available in experimental backend
         return {
           success: true,
@@ -255,8 +340,8 @@ class ApiService {
     try {
       const response = await this.api.post<ApiResponse<Contact>>('/contacts', data);
       return response.data;
-    } catch (error: any) {
-      if (error.response?.status === 404) {
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
         // Contact endpoints not available in experimental backend
         return {
           success: false,
@@ -272,8 +357,8 @@ class ApiService {
     try {
       const response = await this.api.put<ApiResponse<Contact>>(`/contacts/${id}`, data);
       return response.data;
-    } catch (error: any) {
-      if (error.response?.status === 404) {
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
         // Contact endpoints not available in experimental backend
         return {
           success: false,
@@ -289,8 +374,8 @@ class ApiService {
     try {
       const response = await this.api.delete<ApiResponse<{ message: string }>>(`/contacts/${id}`);
       return response.data;
-    } catch (error: any) {
-      if (error.response?.status === 404) {
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
         // Contact endpoints not available in experimental backend
         return {
           success: false,
@@ -310,7 +395,7 @@ class ApiService {
         console.log('[ApiService] Using experimental agent service');
         return await agentService.queryAgent(data);
       }
-    } catch (error) {
+    } catch {
       console.warn('[ApiService] Experimental agent service failed, falling back to backend');
     }
 
@@ -333,12 +418,28 @@ class ApiService {
           error: undefined
         }
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[ApiService] Backend query failed:', error);
       // Convert technical errors to user-friendly messages
       let friendlyMessage = 'Query failed. Please try again.';
-      const errorMsg = error.response?.data?.message || error.message || 'Unknown error';
-      
+
+      const errorMsg = axios.isAxiosError(error)
+        ? (() => {
+          const responseData = error.response?.data;
+          if (
+            responseData &&
+            typeof responseData === 'object' &&
+            'message' in responseData &&
+            typeof (responseData as Record<string, unknown>).message === 'string'
+          ) {
+            return (responseData as Record<string, unknown>).message as string;
+          }
+          return error.message || 'Unknown error';
+        })()
+        : error instanceof Error
+          ? error.message
+          : String(error);
+
       if (errorMsg.includes('invalid query')) {
         friendlyMessage = "I didn't understand that. Could you please rephrase your question?";
       } else if (errorMsg.includes('timeout')) {
@@ -346,7 +447,7 @@ class ApiService {
       } else if (errorMsg.includes('network')) {
         friendlyMessage = "I'm having trouble connecting. Please check your internet connection and try again.";
       }
-      
+
       return {
         result: {
           success: false,
@@ -428,7 +529,7 @@ class ApiService {
     }
   }
 
-  async executeAgentTool(toolName: string, params: any) {
+  async executeAgentTool(toolName: string, params: Record<string, unknown>) {
     try {
       return await agentService.executeTool(toolName, params);
     } catch (error) {
@@ -472,6 +573,9 @@ class ApiService {
 
   async activatePromptVersion(id: string): Promise<ApiResponse<PromptVersionRecord> | PromptVersionRecord> {
     const response = await this.api.patch<ApiResponse<PromptVersionRecord> | PromptVersionRecord>(`/versions/${id}/activate`);
+  // Liquidity Pool endpoints
+  async getLiquidityStats(request?: LiquidityRequest): Promise<ApiResponse<LiquidityStats>> {
+    const response = await this.api.post<ApiResponse<LiquidityStats>>('/liquidity', request || {});
     return response.data;
   }
 

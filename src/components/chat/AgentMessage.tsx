@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ChatMessage } from '@/types';
 import { Copy, Check } from 'lucide-react';
+import ExecutionTrace from './ExecutionTrace';
 
 interface AgentMessageProps {
   message: ChatMessage;
@@ -241,6 +242,12 @@ export default function AgentMessage({ message, onCopy }: AgentMessageProps) {
           {renderContent()}
         </ReactMarkdown>
       </div>
+      
+      {/* Execution Trace */}
+      {message.metadata?.executionTrace && (
+        <ExecutionTrace trace={message.metadata.executionTrace} />
+      )}
+      
       <button
         onClick={handleCopy}
         className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity p-1 text-gray-400 hover:text-white"

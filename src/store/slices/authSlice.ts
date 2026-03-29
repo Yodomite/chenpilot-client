@@ -152,6 +152,19 @@ export const googleAuth = createAsyncThunk(
   }
 );
 
+export const refreshToken = createAsyncThunk(
+  'auth/refreshToken',
+  async (_, { rejectWithValue }) => {
+    try {
+      // Call the API service refresh token method
+      const response = await apiService.refreshToken();
+      return { token: response.token };
+    } catch (error: any) {
+      return rejectWithValue(error.message || 'Token refresh failed');
+    }
+  }
+);
+
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -306,10 +319,36 @@ const authSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload as string;
         state.isAuthenticated = false;
+      })
+      // Refresh Token
+      .addCase(refreshToken.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(refreshToken.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.token = action.payload.token;
+        state.isAuthenticated = true;
+        state.error = null;
+        // Update localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('auth_token', action.payload.token);
+        }
+      })
+      .addCase(refreshToken.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+        state.isAuthenticated = false;
+        state.token = null;
+        // Clear localStorage on refresh failure
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('user_data');
+        }
       });
   },
 });
 
 export const { clearError, setToken, clearAuth, initializeAuth } = authSlice.actions;
-export { login, register, logout, loadUser, updateProfile, changePassword, googleAuth };
+export { login, register, logout, loadUser, updateProfile, changePassword, googleAuth, refreshToken };
 export default authSlice.reducer;

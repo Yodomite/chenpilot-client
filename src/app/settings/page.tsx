@@ -1,17 +1,63 @@
 'use client';
 
-import React from 'react';
-import { useRouter } from 'next/navigation';
-import { useAppDispatch, useAppSelector } from '@/store';
+import React, { useState } from 'react';
+import axios from 'axios';
+import { useAppSelector } from '@/store';
 import { ChatLayout } from '@/components/layout/ChatLayout';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import apiService from '@/services/api';
 
 export default function SettingsPage() {
-  const router = useRouter();
   const { isAuthenticated, user } = useAppSelector((state) => state.auth);
   const { theme } = useAppSelector((state) => state.ui) || { mode: 'dark' };
+
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const handleExportData = async () => {
+    setExportError(null);
+    setIsExporting(true);
+
+    try {
+      const dataBlob = await apiService.exportUserData();
+      const filename = `chenpilot-user-data-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+      const url = window.URL.createObjectURL(dataBlob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+    } catch (error: unknown) {
+      let message = 'Failed to export user data.';
+
+      if (axios.isAxiosError(error)) {
+        const responseData = error.response?.data;
+        if (
+          responseData &&
+          typeof responseData === 'object' &&
+          'message' in responseData &&
+          typeof (responseData as Record<string, unknown>).message === 'string' &&
+          (responseData as Record<string, unknown>).message
+        ) {
+          message = (responseData as Record<string, unknown>).message as string;
+        } else if (error.message) {
+          message = error.message;
+        }
+      } else if (error instanceof Error) {
+        message = error.message;
+      }
+
+      setExportError(message);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   if (!isAuthenticated) {
     return (
@@ -168,6 +214,20 @@ export default function SettingsPage() {
                     <Button variant="ghost" className="w-full justify-start">
                       Change Password
                     </Button>
+
+                    <Button
+                      variant="secondary"
+                      className="w-full justify-start"
+                      loading={isExporting}
+                      onClick={handleExportData}
+                    >
+                      {isExporting ? 'Exporting...' : 'Export My Data'}
+                    </Button>
+
+                    {exportError && (
+                      <p className="text-sm text-red-400">{exportError}</p>
+                    )}
+
                     <Button variant="ghost" className="w-full justify-start text-red-600 hover:text-red-700">
                       Delete Account
                     </Button>

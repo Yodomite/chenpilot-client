@@ -103,41 +103,23 @@ export const sendMessage = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
 
-      // Mock agent response
-      const mockResponse = {
-        result: {
-          success: true,
-          data: `Mock agent response to: "${query}". This is a simulated response since backend is disconnected.`,
-          error: null,
-          metadata: {
-            type: 'info',
-            action: 'mock',
-            amount: null,
-            asset: null,
-            requiresConfirmation: false,
-          }
-        }
-      };
+      // Call the API service to get actual response
+      const response = await apiService.queryAgent({ userId, query });
       
-      // Save agent response locally (no server call needed)
+      // Create agent message with execution trace if available
       const agentMessage: ChatMessage = {
         id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         type: 'agent',
-        content: mockResponse.result.data,
+        content: response.result.data,
         timestamp: new Date().toISOString(),
         metadata: {
-          success: mockResponse.result.success,
-          error: mockResponse.result.error,
-          transactionHash: null,
-          type: mockResponse.result.metadata?.type,
-          action: mockResponse.result.metadata?.action,
-          amount: mockResponse.result.metadata?.amount,
-          asset: mockResponse.result.metadata?.asset,
-          requiresConfirmation: mockResponse.result.metadata?.requiresConfirmation,
+          success: response.result.success,
+          error: response.result.error,
+          executionTrace: response.result.executionTrace,
         }
       };
 
-      return { response: mockResponse, conversation, userMessage, agentMessage };
+      return { response, conversation, userMessage, agentMessage };
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to send message');
     }
