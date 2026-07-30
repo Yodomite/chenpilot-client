@@ -6,7 +6,7 @@
     "dev": "next dev --turbopack --port 3000",
     "build": "next build --turbopack",
     "start": "next start --port 3000",
-    "lint": "eslint",
+    "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
     "prepare": "husky"
