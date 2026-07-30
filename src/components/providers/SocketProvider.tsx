@@ -10,7 +10,7 @@ interface SocketContextType {
   isConnected: boolean;
   connect: () => void;
   disconnect: () => void;
-  emit: (event: string, data?: any) => void;
+  emit: (event: string, data?: any) => boolean;
   on: (event: string, callback: (...args: any[]) => void) => void;
   off: (event: string, callback?: (...args: any[]) => void) => void;
   once: (event: string, callback: (...args: any[]) => void) => void;
@@ -69,8 +69,8 @@ export function SocketProvider({ children, config, autoConnect = true }: SocketP
     }
   };
 
-  const emit = (event: string, data?: any) => {
-    socketManager?.emit(event, data);
+  const emit = (event: string, data?: any): boolean => {
+    return socketManager?.emit(event, data) ?? false;
   };
 
   const on = (event: string, callback: (...args: any[]) => void) => {
