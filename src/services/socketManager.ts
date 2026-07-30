@@ -10,12 +10,17 @@ export interface SocketConfig {
     reconnectionAttempts?: number;
     timeout?: number;
   };
+  queueEnabled?: boolean;
+  maxQueueSize?: number;
 }
 
 export class SocketManager {
   private socket: Socket | null = null;
   private config: SocketConfig;
   private reconnectAttempts = 0;
+  private eventQueue: Array<{ event: string; data?: any }> = [];
+  private queueEnabled: boolean;
+  private maxQueueSize: number;
 
   constructor(config: SocketConfig) {
     this.config = {
@@ -30,6 +35,8 @@ export class SocketManager {
       },
       ...config,
     };
+    this.queueEnabled = this.config.queueEnabled ?? false;
+    this.maxQueueSize = this.config.maxQueueSize ?? 100;
   }
 
   connect(): Socket {
@@ -42,6 +49,7 @@ export class SocketManager {
     this.socket.on('connect', () => {
       console.log('Socket connected:', this.socket?.id);
       this.reconnectAttempts = 0;
+      this.flushQueue();
     });
 
     this.socket.on('disconnect', (reason) => {
@@ -56,6 +64,7 @@ export class SocketManager {
     this.socket.on('reconnect', (attemptNumber) => {
       console.log('Socket reconnected after', attemptNumber, 'attempts');
       this.reconnectAttempts = 0;
+      this.flushQueue();
     });
 
     this.socket.on('reconnect_error', (error) => {
@@ -84,11 +93,35 @@ export class SocketManager {
     return this.socket?.connected || false;
   }
 
-  emit(event: string, data?: any): void {
+  emit(event: string, data?: any): boolean {
     if (this.socket?.connected) {
       this.socket.emit(event, data);
-    } else {
-      console.warn('Socket not connected. Cannot emit event:', event);
+      return true;
+    }
+
+    if (this.queueEnabled) {
+      if (this.eventQueue.length < this.maxQueueSize) {
+        this.eventQueue.push({ event, data });
+      } else {
+        console.warn('Event queue is full. Dropping event:', event);
+      }
+      console.warn('Socket not connected. Event queued:', event);
+      return false;
+    }
+
+    console.warn('Socket not connected. Cannot emit event:', event);
+    return false;
+  }
+
+  private flushQueue(): void {
+    while (this.eventQueue.length > 0) {
+      const { event, data } = this.eventQueue.shift()!;
+      if (this.socket?.connected) {
+        this.socket.emit(event, data);
+      } else {
+        this.eventQueue.unshift({ event, data });
+        break;
+      }
     }
   }
 
