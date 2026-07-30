@@ -1,6 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSocket as useSocketContext } from '@/components/providers/SocketProvider';
-import type { Socket } from 'socket.io-client';
 
 export function useSocket() {
   const context = useSocketContext();
@@ -18,18 +17,29 @@ export function useSocket() {
   };
 }
 
-export function useSocketEvent(event: string, callback: (...args: any[]) => void) {
+export function useSocketEvent(event: string, callback: (...args: unknown[]) => void) {
   const { socket, on, off } = useSocket();
+  const callbackRef = useRef(callback);
+
+  // Keep ref updated with latest callback
+  useEffect(() => {
+    callbackRef.current = callback;
+  });
+
+  // Stable listener function that delegates to the ref
+  const stableListener = (...args: unknown[]) => {
+    callbackRef.current(...args);
+  };
 
   useEffect(() => {
     if (socket) {
-      on(event, callback);
+      on(event, stableListener);
       
       return () => {
-        off(event, callback);
+        off(event, stableListener);
       };
     }
-  }, [socket, event, callback, on, off]);
+  }, [socket, event, on, off]);
 }
 
 export function useSocketConnection() {
