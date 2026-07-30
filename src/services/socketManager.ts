@@ -18,13 +18,13 @@ export class SocketManager {
   private socket: Socket | null = null;
   private config: SocketConfig;
   private reconnectAttempts = 0;
-  private eventQueue: Array<{ event: string; data?: any }> = [];
+  private eventQueue: Array<{ event: string; data?: unknown }> = [];
   private queueEnabled: boolean;
   private maxQueueSize: number;
 
   constructor(config: SocketConfig) {
     const defaults = {
-      transports: ['websocket', 'polling'],
+      transports: ['websocket', 'polling'] as ('polling' | 'websocket')[],
       autoConnect: true,
       reconnection: true,
       reconnectionDelay: 1000,
@@ -97,33 +97,41 @@ export class SocketManager {
     return this.socket?.connected || false;
   }
 
-  emit(event: string, data?: unknown): void {
+  emit(event: string, data?: unknown): boolean {
     if (this.socket?.connected) {
-      this.socket.emit(event, data);
-      return true;
+      try {
+        this.socket.emit(event, data);
+        return true;
+      } catch (error) {
+        console.warn('Failed to emit event:', event, error);
+        return false;
+      }
     }
 
-    if (this.queueEnabled) {
-      if (this.eventQueue.length < this.maxQueueSize) {
-        this.eventQueue.push({ event, data });
-      } else {
-        console.warn('Event queue is full. Dropping event:', event);
-      }
-      console.warn('Socket not connected. Event queued:', event);
+    if (!this.queueEnabled) {
+      console.warn('Socket not connected. Cannot emit event:', event);
       return false;
     }
 
-    console.warn('Socket not connected. Cannot emit event:', event);
+    if (this.eventQueue.length >= this.maxQueueSize) {
+      console.warn('Event queue is full. Dropping event:', event);
+      return false;
+    }
+
+    this.eventQueue.push({ event, data });
+    console.warn('Socket not connected. Event queued:', event);
     return false;
   }
 
   private flushQueue(): void {
-    while (this.eventQueue.length > 0) {
-      const { event, data } = this.eventQueue.shift()!;
-      if (this.socket?.connected) {
-        this.socket.emit(event, data);
-      } else {
-        this.eventQueue.unshift({ event, data });
+    while (this.eventQueue.length > 0 && this.socket?.connected) {
+      const queuedEvent = this.eventQueue[0];
+
+      try {
+        this.socket.emit(queuedEvent.event, queuedEvent.data);
+        this.eventQueue.shift();
+      } catch (error) {
+        console.warn('Failed to flush queued event:', queuedEvent.event, error);
         break;
       }
     }
