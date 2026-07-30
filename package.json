@@ -6,7 +6,7 @@
     "dev": "next dev --turbopack --port 3000",
     "build": "next build --turbopack",
     "start": "next start --port 3000",
-    "lint": "eslint",
+    "lint": "next lint",
     "test": "echo \"No tests yet\" && exit 0",
     "prepare": "husky"
   },
