@@ -14,11 +14,16 @@ export interface SocketConfig {
   maxQueueSize?: number;
 }
 
+interface QueuedEvent {
+  event: string;
+  data?: unknown;
+}
+
 export class SocketManager {
   private socket: Socket | null = null;
   private config: SocketConfig;
   private reconnectAttempts = 0;
-  private eventQueue: Array<{ event: string; data?: any }> = [];
+  private eventQueue: QueuedEvent[] = [];
   private queueEnabled: boolean;
   private maxQueueSize: number;
 
@@ -97,35 +102,43 @@ export class SocketManager {
     return this.socket?.connected || false;
   }
 
-  emit(event: string, data?: unknown): void {
+  /**
+   * Emits an event immediately when connected, or queues it when queueing is
+   * enabled. The return value indicates whether the event was sent immediately.
+   */
+  emit(event: string, data?: unknown): boolean {
     if (this.socket?.connected) {
       this.socket.emit(event, data);
       return true;
     }
 
-    if (this.queueEnabled) {
-      if (this.eventQueue.length < this.maxQueueSize) {
-        this.eventQueue.push({ event, data });
-      } else {
-        console.warn('Event queue is full. Dropping event:', event);
-      }
-      console.warn('Socket not connected. Event queued:', event);
+    if (!this.queueEnabled) {
+      console.warn('Socket not connected. Cannot emit event:', event);
       return false;
     }
 
-    console.warn('Socket not connected. Cannot emit event:', event);
+    if (this.eventQueue.length >= this.maxQueueSize) {
+      console.warn('Event queue is full. Dropping event:', event);
+      return false;
+    }
+
+    this.eventQueue.push({ event, data });
+    console.warn('Socket not connected. Event queued:', event);
     return false;
   }
 
   private flushQueue(): void {
     while (this.eventQueue.length > 0) {
-      const { event, data } = this.eventQueue.shift()!;
-      if (this.socket?.connected) {
-        this.socket.emit(event, data);
-      } else {
-        this.eventQueue.unshift({ event, data });
+      if (!this.socket?.connected) {
         break;
       }
+
+      const queuedEvent = this.eventQueue.shift();
+      if (!queuedEvent) {
+        break;
+      }
+
+      this.socket.emit(queuedEvent.event, queuedEvent.data);
     }
   }
 
