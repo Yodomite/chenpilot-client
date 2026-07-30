@@ -7,7 +7,7 @@
     "build": "next build --turbopack",
     "start": "next start --port 3000",
     "lint": "eslint",
-    "test": "echo \"No tests yet\" && exit 0",
+    "test": "vitest run",
     "prepare": "husky"
   },
   "dependencies": {
@@ -46,7 +46,8 @@
     "husky": "^9.1.7",
     "lint-staged": "^15.5.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [

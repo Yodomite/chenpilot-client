@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback, ReactNode } from 'react';
 import { Socket } from 'socket.io-client';
 import { SocketManager, SocketConfig, initializeSocketManager } from '@/services/socketManager';
 
@@ -10,10 +10,10 @@ interface SocketContextType {
   isConnected: boolean;
   connect: () => void;
   disconnect: () => void;
-  emit: (event: string, data?: any) => void;
-  on: (event: string, callback: (...args: any[]) => void) => void;
-  off: (event: string, callback?: (...args: any[]) => void) => void;
-  once: (event: string, callback: (...args: any[]) => void) => void;
+  emit: (event: string, data?: unknown) => void;
+  on: (event: string, callback: (...args: unknown[]) => void) => void;
+  off: (event: string, callback?: (...args: unknown[]) => void) => void;
+  once: (event: string, callback: (...args: unknown[]) => void) => void;
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
@@ -29,6 +29,10 @@ export function SocketProvider({ children, config, autoConnect = true }: SocketP
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
+  // Refs to hold handler references so they can be cleaned up.
+  const handleConnectRef = useRef<(() => void) | null>(null);
+  const handleDisconnectRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
     const manager = initializeSocketManager(config);
     setSocketManager(manager);
@@ -38,52 +42,114 @@ export function SocketProvider({ children, config, autoConnect = true }: SocketP
       setSocket(socketInstance);
       setIsConnected(socketInstance.connected);
 
-      // Update connection status
-      socketInstance.on('connect', () => setIsConnected(true));
-      socketInstance.on('disconnect', () => setIsConnected(false));
+      // Store handler refs for cleanup.
+      handleConnectRef.current = () => setIsConnected(true);
+      handleDisconnectRef.current = () => setIsConnected(false);
+
+      socketInstance.on('connect', handleConnectRef.current);
+      socketInstance.on('disconnect', handleDisconnectRef.current);
     }
 
     return () => {
+      // Remove handlers from the socket before disconnecting.
+      if (handleConnectRef.current) {
+        const sock = manager.getSocket();
+        if (sock) {
+          sock.off('connect', handleConnectRef.current);
+        }
+        handleConnectRef.current = null;
+      }
+      if (handleDisconnectRef.current) {
+        const sock = manager.getSocket();
+        if (sock) {
+          sock.off('disconnect', handleDisconnectRef.current);
+        }
+        handleDisconnectRef.current = null;
+      }
       if (autoConnect) {
         manager.disconnect();
       }
     };
   }, [config, autoConnect]);
 
-  const connect = () => {
+  const connect = useCallback(() => {
     if (socketManager) {
+      // Remove any stale handlers before reconnecting.
+      if (handleConnectRef.current) {
+        const sock = socketManager.getSocket();
+        if (sock) {
+          sock.off('connect', handleConnectRef.current);
+        }
+        handleConnectRef.current = null;
+      }
+      if (handleDisconnectRef.current) {
+        const sock = socketManager.getSocket();
+        if (sock) {
+          sock.off('disconnect', handleDisconnectRef.current);
+        }
+        handleDisconnectRef.current = null;
+      }
+
       const socketInstance = socketManager.connect();
       setSocket(socketInstance);
       setIsConnected(socketInstance.connected);
 
-      socketInstance.on('connect', () => setIsConnected(true));
-      socketInstance.on('disconnect', () => setIsConnected(false));
-    }
-  };
+      handleConnectRef.current = () => setIsConnected(true);
+      handleDisconnectRef.current = () => setIsConnected(false);
 
-  const disconnect = () => {
+      socketInstance.on('connect', handleConnectRef.current);
+      socketInstance.on('disconnect', handleDisconnectRef.current);
+    }
+  }, [socketManager]);
+
+  const disconnect = useCallback(() => {
     if (socketManager) {
+      // Remove handler refs before disconnecting.
+      const sock = socketManager.getSocket();
+      if (sock) {
+        if (handleConnectRef.current) {
+          sock.off('connect', handleConnectRef.current);
+        }
+        if (handleDisconnectRef.current) {
+          sock.off('disconnect', handleDisconnectRef.current);
+        }
+      }
+      handleConnectRef.current = null;
+      handleDisconnectRef.current = null;
+
       socketManager.disconnect();
       setSocket(null);
       setIsConnected(false);
     }
-  };
+  }, [socketManager]);
 
-  const emit = (event: string, data?: any) => {
-    socketManager?.emit(event, data);
-  };
+  const emit = useCallback(
+    (event: string, data?: unknown) => {
+      socketManager?.emit(event, data);
+    },
+    [socketManager]
+  );
 
-  const on = (event: string, callback: (...args: any[]) => void) => {
-    socketManager?.on(event, callback);
-  };
+  const on = useCallback(
+    (event: string, callback: (...args: unknown[]) => void) => {
+      socketManager?.on(event, callback);
+    },
+    [socketManager]
+  );
 
-  const off = (event: string, callback?: (...args: any[]) => void) => {
-    socketManager?.off(event, callback);
-  };
+  const off = useCallback(
+    (event: string, callback?: (...args: unknown[]) => void) => {
+      socketManager?.off(event, callback);
+    },
+    [socketManager]
+  );
 
-  const once = (event: string, callback: (...args: any[]) => void) => {
-    socketManager?.once(event, callback);
-  };
+  const once = useCallback(
+    (event: string, callback: (...args: unknown[]) => void) => {
+      socketManager?.once(event, callback);
+    },
+    [socketManager]
+  );
 
   const value: SocketContextType = {
     socket,
@@ -97,11 +163,7 @@ export function SocketProvider({ children, config, autoConnect = true }: SocketP
     once,
   };
 
-  return (
-    <SocketContext.Provider value={value}>
-      {children}
-    </SocketContext.Provider>
-  );
+  return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;
 }
 
 export function useSocket(): SocketContextType {
