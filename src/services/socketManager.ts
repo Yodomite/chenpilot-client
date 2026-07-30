@@ -23,17 +23,21 @@ export class SocketManager {
   private maxQueueSize: number;
 
   constructor(config: SocketConfig) {
+    const defaults = {
+      transports: ['websocket', 'polling'],
+      autoConnect: true,
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+      timeout: 20000,
+    };
+
     this.config = {
-      options: {
-        transports: ['websocket', 'polling'],
-        autoConnect: true,
-        reconnection: true,
-        reconnectionDelay: 1000,
-        reconnectionAttempts: 5,
-        timeout: 20000,
-        ...config.options,
-      },
       ...config,
+      options: {
+        ...defaults,
+        ...(config.options || {}),
+      },
     };
     this.queueEnabled = this.config.queueEnabled ?? false;
     this.maxQueueSize = this.config.maxQueueSize ?? 100;
@@ -93,7 +97,7 @@ export class SocketManager {
     return this.socket?.connected || false;
   }
 
-  emit(event: string, data?: any): boolean {
+  emit(event: string, data?: unknown): void {
     if (this.socket?.connected) {
       this.socket.emit(event, data);
       return true;
@@ -125,19 +129,19 @@ export class SocketManager {
     }
   }
 
-  on(event: string, callback: (...args: any[]) => void): void {
+  on(event: string, callback: (...args: unknown[]) => void): void {
     if (this.socket) {
       this.socket.on(event, callback);
     }
   }
 
-  off(event: string, callback?: (...args: any[]) => void): void {
+  off(event: string, callback?: (...args: unknown[]) => void): void {
     if (this.socket) {
       this.socket.off(event, callback);
     }
   }
 
-  once(event: string, callback: (...args: any[]) => void): void {
+  once(event: string, callback: (...args: unknown[]) => void): void {
     if (this.socket) {
       this.socket.once(event, callback);
     }
