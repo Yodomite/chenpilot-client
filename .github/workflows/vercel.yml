@@ -53,12 +53,7 @@ jobs:
         run: pnpm lint
 
       - name: Run tests
-        run: |
-          if grep -q '"test"' package.json; then
-            pnpm test
-          else
-            echo "No test script found, skipping tests"
-          fi
+        run: pnpm test
 
       - name: Build project
         run: pnpm build
