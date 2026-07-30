@@ -21,10 +21,11 @@ const SocketContext = createContext<SocketContextType | undefined>(undefined);
 interface SocketProviderProps {
   children: ReactNode;
   config: SocketConfig;
+  configKey?: string;
   autoConnect?: boolean;
 }
 
-export function SocketProvider({ children, config, autoConnect = true }: SocketProviderProps) {
+export function SocketProvider({ children, config, configKey, autoConnect = true }: SocketProviderProps) {
   const [socketManager, setSocketManager] = useState<SocketManager | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -38,7 +39,6 @@ export function SocketProvider({ children, config, autoConnect = true }: SocketP
       setSocket(socketInstance);
       setIsConnected(socketInstance.connected);
 
-      // Update connection status
       socketInstance.on('connect', () => setIsConnected(true));
       socketInstance.on('disconnect', () => setIsConnected(false));
     }
@@ -48,7 +48,7 @@ export function SocketProvider({ children, config, autoConnect = true }: SocketP
         manager.disconnect();
       }
     };
-  }, [config, autoConnect]);
+  }, [configKey, autoConnect]);
 
   const connect = () => {
     if (socketManager) {

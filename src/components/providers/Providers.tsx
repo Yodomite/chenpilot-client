@@ -26,6 +26,7 @@ export function Providers({ children }: ProvidersProps) {
   return (
     <Provider store={store}>
       <SocketProvider 
+        configKey="default"
         config={{
           url: process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001',
           options: {
