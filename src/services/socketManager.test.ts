@@ -1,12 +1,34 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SocketManager } from './socketManager';
+
+const { io, mockSocket } = vi.hoisted(() => {
+  const socket = {
+    connected: false,
+    id: 'mock-socket-id',
+    on: vi.fn().mockReturnThis(),
+    off: vi.fn().mockReturnThis(),
+    once: vi.fn().mockReturnThis(),
+    emit: vi.fn().mockReturnThis(),
+    disconnect: vi.fn().mockReturnThis(),
+  };
+
+  return {
+    io: vi.fn(() => socket),
+    mockSocket: socket,
+  };
+});
+
+vi.mock('socket.io-client', () => ({
+  io,
+}));
 
 describe('SocketManager', () => {
   beforeEach(() => {
-    vi.resetModules();
+    vi.clearAllMocks();
+    mockSocket.connected = false;
   });
 
-  it('should initialize with default options merged with partial config options', () => {
+  it('should preserve defaults when only some options are overridden', () => {
     const manager = new SocketManager({
       url: 'http://localhost:3000',
       options: {
@@ -15,18 +37,32 @@ describe('SocketManager', () => {
       },
     });
 
-    expect(manager.getSocket()).toBeNull();
+    manager.connect();
 
-    // Access config by connecting; we verify merged config indirectly via connect call
-    // since config is private. We can at least ensure no exception is thrown.
-    expect(() => manager.connect()).not.toThrow();
+    expect(io).toHaveBeenCalledWith('http://localhost:3000', {
+      transports: ['websocket', 'polling'],
+      autoConnect: true,
+      reconnection: false,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+      timeout: 5000,
+    });
   });
 
-  it('should use full defaults when no options are provided', () => {
+  it('should use all defaults when no options are provided', () => {
     const manager = new SocketManager({
       url: 'http://localhost:3000',
     });
 
-    expect(() => manager.connect()).not.toThrow();
+    manager.connect();
+
+    expect(io).toHaveBeenCalledWith('http://localhost:3000', {
+      transports: ['websocket', 'polling'],
+      autoConnect: true,
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+      timeout: 20000,
+    });
   });
 });
