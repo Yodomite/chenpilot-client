@@ -23,7 +23,7 @@ export class SocketManager {
   private maxQueueSize: number;
 
   constructor(config: SocketConfig) {
-    const defaults = {
+    const defaultOptions: NonNullable<SocketConfig['options']> = {
       transports: ['websocket', 'polling'],
       autoConnect: true,
       reconnection: true,
@@ -31,13 +31,14 @@ export class SocketManager {
       reconnectionAttempts: 5,
       timeout: 20000,
     };
+    const mergedOptions = {
+      ...defaultOptions,
+      ...(config.options || {}),
+    };
 
     this.config = {
       ...config,
-      options: {
-        ...defaults,
-        ...(config.options || {}),
-      },
+      options: mergedOptions,
     };
     this.queueEnabled = this.config.queueEnabled ?? false;
     this.maxQueueSize = this.config.maxQueueSize ?? 100;
@@ -97,7 +98,7 @@ export class SocketManager {
     return this.socket?.connected || false;
   }
 
-  emit(event: string, data?: unknown): void {
+  emit(event: string, data?: unknown): boolean {
     if (this.socket?.connected) {
       this.socket.emit(event, data);
       return true;
