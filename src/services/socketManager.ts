@@ -30,6 +30,8 @@ export class SocketManager {
   private registeredHandlers = new Map<string, Set<SocketEventHandler>>();
 
   constructor(config: SocketConfig) {
+    const defaults = {
+      transports: ['websocket', 'polling'] as ('polling' | 'websocket')[],
     const defaultOptions: NonNullable<SocketConfig['options']> = {
       transports: ['websocket', 'polling'],
       autoConnect: true,
@@ -122,8 +124,13 @@ export class SocketManager {
    */
   emit(event: string, data?: unknown): boolean {
     if (this.socket?.connected) {
-      this.socket.emit(event, data);
-      return true;
+      try {
+        this.socket.emit(event, data);
+        return true;
+      } catch (error) {
+        console.warn('Failed to emit event:', event, error);
+        return false;
+      }
     }
 
     if (!this.queueEnabled) {
