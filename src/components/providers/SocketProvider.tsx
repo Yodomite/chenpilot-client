@@ -39,14 +39,12 @@ export function SocketProvider({ children, config, configKey, autoConnect = true
       setSocket(socketInstance);
       setIsConnected(socketInstance.connected);
 
-      socketInstance.on('connect', () => setIsConnected(true));
-      socketInstance.on('disconnect', () => setIsConnected(false));
+      manager.on('connect', () => setIsConnected(true));
+      manager.on('disconnect', () => setIsConnected(false));
     }
 
     return () => {
-      if (autoConnect) {
-        manager.disconnect();
-      }
+      manager.disconnect();
     };
   }, [configKey, autoConnect]);
 
@@ -56,8 +54,8 @@ export function SocketProvider({ children, config, configKey, autoConnect = true
       setSocket(socketInstance);
       setIsConnected(socketInstance.connected);
 
-      socketInstance.on('connect', () => setIsConnected(true));
-      socketInstance.on('disconnect', () => setIsConnected(false));
+      socketManager.on('connect', () => setIsConnected(true));
+      socketManager.on('disconnect', () => setIsConnected(false));
     }
   };
 
