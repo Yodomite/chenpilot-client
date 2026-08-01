@@ -30,22 +30,18 @@ export class SocketManager {
   private registeredHandlers = new Map<string, Set<SocketEventHandler>>();
 
   constructor(config: SocketConfig) {
-    const defaultOptions: NonNullable<SocketConfig['options']> = {
-      transports: ['websocket', 'polling'],
+    const defaults = {
+      transports: ['websocket', 'polling'] as ('polling' | 'websocket')[],
       autoConnect: true,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 5,
       timeout: 20000,
     };
-    const mergedOptions = {
-      ...defaultOptions,
-      ...(config.options || {}),
-    };
 
     this.config = {
       ...config,
-      options: mergedOptions,
+      options: { ...defaults, ...(config.options || {}) },
     };
     this.queueEnabled = this.config.queueEnabled ?? false;
     this.maxQueueSize = this.config.maxQueueSize ?? 100;
