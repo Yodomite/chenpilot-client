@@ -1,20 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { io } from 'socket.io-client';
 import { SocketManager } from './socketManager';
 
-const mockSocket = vi.hoisted(() => ({
-  on: vi.fn().mockReturnThis(),
-  off: vi.fn().mockReturnThis(),
-  once: vi.fn().mockReturnThis(),
-  emit: vi.fn().mockReturnThis(),
-  disconnect: vi.fn().mockReturnThis(),
-  connected: false,
-  id: 'mock-socket-id',
-}));
+const { io, mockSocket } = vi.hoisted(() => {
+  const socket = {
+    connected: false,
+    id: 'mock-socket-id',
+    on: vi.fn().mockReturnThis(),
+    off: vi.fn().mockReturnThis(),
+    once: vi.fn().mockReturnThis(),
+    emit: vi.fn().mockReturnThis(),
+    disconnect: vi.fn().mockReturnThis(),
+  };
+
+  return {
+    io: vi.fn(() => socket),
+    mockSocket: socket,
+  };
+});
 
 vi.mock('socket.io-client', () => ({
-  io: vi.fn(() => mockSocket),
-  Socket: vi.fn(),
+  io,
 }));
 
 describe('SocketManager', () => {
@@ -44,7 +49,7 @@ describe('SocketManager', () => {
     });
   });
 
-  it('should use full defaults when no options are provided', () => {
+  it('should use all defaults when no options are provided', () => {
     const manager = new SocketManager({
       url: 'http://localhost:3000',
     });
