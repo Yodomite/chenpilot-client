@@ -32,6 +32,8 @@ export class SocketManager {
   constructor(config: SocketConfig) {
     const defaults = {
       transports: ['websocket', 'polling'] as ('polling' | 'websocket')[],
+    const defaultOptions: NonNullable<SocketConfig['options']> = {
+      transports: ['websocket', 'polling'],
       autoConnect: true,
       reconnection: true,
       reconnectionDelay: 1000,
@@ -118,8 +120,13 @@ export class SocketManager {
    */
   emit(event: string, data?: unknown): boolean {
     if (this.socket?.connected) {
-      this.socket.emit(event, data);
-      return true;
+      try {
+        this.socket.emit(event, data);
+        return true;
+      } catch (error) {
+        console.warn('Failed to emit event:', event, error);
+        return false;
+      }
     }
 
     if (!this.queueEnabled) {
