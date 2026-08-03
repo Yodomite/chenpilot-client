@@ -40,14 +40,10 @@ export class SocketManager {
       reconnectionAttempts: 5,
       timeout: 20000,
     };
-    const mergedOptions = {
-      ...defaultOptions,
-      ...(config.options || {}),
-    };
 
     this.config = {
       ...config,
-      options: mergedOptions,
+      options: { ...defaults, ...(config.options || {}) },
     };
     this.queueEnabled = this.config.queueEnabled ?? false;
     this.maxQueueSize = this.config.maxQueueSize ?? 100;

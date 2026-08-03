@@ -74,6 +74,25 @@ describe('SocketManager', () => {
         timeout: 10000,
       });
     });
+
+    it('should assert default presence when partial options are provided', () => {
+      const manager = new SocketManager({
+        url: 'http://test.com',
+        options: {
+          timeout: 15000,
+        },
+      });
+      const { io } = require('socket.io-client');
+      manager.connect();
+      expect(io).toHaveBeenCalledWith('http://test.com', {
+        transports: ['websocket', 'polling'],
+        autoConnect: true,
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5,
+        timeout: 15000,
+      });
+    });
   });
 
   describe('connect', () => {
