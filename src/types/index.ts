@@ -219,6 +219,23 @@ export interface Conversation {
   messages?: ChatMessage[];
 }
 
+export interface PromptVersionRecord {
+  [key: string]: unknown;
+}
+
+export interface PromptVersion {
+  id: string;
+  label: string;
+  description: string;
+  template: string;
+  version: string;
+  isActive: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+  tags: string[];
+  raw: PromptVersionRecord;
+}
+
 // API Response Types
 export interface ApiError {
   success: false;

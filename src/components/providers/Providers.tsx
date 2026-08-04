@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast';
 import { store } from '@/store';
 import { initializeAuth } from '@/store/slices/authSlice';
 import { initializeUI } from '@/store/slices/uiSlice';
+import apiService from '@/services/api';
 import { SocketProvider } from './SocketProvider';
 import { TransactionToastListener } from '@/components/TransactionToastListener';
 
@@ -15,6 +16,7 @@ interface ProvidersProps {
 
 export function Providers({ children }: ProvidersProps) {
   useEffect(() => {
+    apiService.loadTokenFromStorage();
     // Initialize authentication state from localStorage
     store.dispatch(initializeAuth());
     // Initialize UI state (theme, etc.)
@@ -24,6 +26,7 @@ export function Providers({ children }: ProvidersProps) {
   return (
     <Provider store={store}>
       <SocketProvider 
+        configKey="default"
         config={{
           url: process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001',
           options: {
